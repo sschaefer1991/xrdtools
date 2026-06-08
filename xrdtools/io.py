@@ -393,7 +393,7 @@ def read_xrdml(filename):
                 data[ikey] = []
 
     # remove redundant information
-    [data.pop(key) for key in ['Phi', 'Psi', 'X', 'Y', 'Z'] if data[key] == []]
+    [data.pop(key) for key in ['Phi', 'Psi', 'X', 'Y', 'Z'] if not data[key]]
     if len(data['iscannb']) == 0:
         for key in ['iscannb', 'idata', 'itime', 'i2Theta', 'iOmega', 'iPhi', 'iPsi', 'iX', 'iY', 'iZ']:
             data.pop(key)
