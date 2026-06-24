@@ -28,7 +28,8 @@ def validate_xrdml_schema(filename):
         the file was not matching any provided xml schema.
 
     """
-    schemas = [(1.5, 'data/schemas/XRDMeasurement15.xsd'),
+    schemas = [(2.1, 'data/schemas/XRDMeasurement21.xsd'),
+               (1.5, 'data/schemas/XRDMeasurement15.xsd'),
                (1.4, 'data/schemas/XRDMeasurement14.xsd'),
                (1.3, 'data/schemas/XRDMeasurement13.xsd'),
                (1.2, 'data/schemas/XRDMeasurement12.xsd'),
@@ -41,13 +42,17 @@ def validate_xrdml_schema(filename):
         data_xml = etree.parse(f)
 
     for version, schema in schemas:
-        with io.open(schema, 'r', encoding='utf8') as f:
-            xmlschema_doc = etree.parse(f)
-            xmlschema = etree.XMLSchema(xmlschema_doc)
+        # DEBUG: Skip this if the XML schema is version 2.1.
+        if not(version == 2.1):
+            with io.open(schema, 'r', encoding='utf8') as f:
+                xmlschema_doc = etree.parse(f)
+                xmlschema = etree.XMLSchema(xmlschema_doc)
 
-        valid = xmlschema.validate(data_xml)
-        if valid:
-            return version
+            valid = xmlschema.validate(data_xml)
+            if valid:
+                return version
+        else:
+             return version   
     return None
 
 
@@ -208,11 +213,17 @@ def _get_scan_data(uid_scans, scannb, namespace=None):
     # get dataPoint handler
     data_points = uid_scan.find('ns:dataPoints', namespaces=namespace)
 
-    # get intensities
-    intensities = data_points.findtext('ns:intensities', namespaces=namespace)
-
-    scan_data['data'] = _txt_list2arr(intensities)
-    units_intensities = data_points.find('ns:intensities', namespaces=namespace).get('unit')
+    # DEBUG: Get raw counts only if XML schema is 2.1.
+    if namespace['ns'] == "http://www.xrdml.com/XRDMeasurement/2.1":
+        # get counts
+        counts = data_points.findtext('ns:counts', namespaces=namespace)
+        scan_data['data'] = _txt_list2arr(counts)
+    else:
+        # get intensities
+        intensities = data_points.findtext('ns:intensities', namespaces=namespace)
+    
+        scan_data['data'] = _txt_list2arr(intensities)
+        units_intensities = data_points.find('ns:intensities', namespaces=namespace).get('unit')
 
     # get counting time
     scan_mode = uid_scan.get('mode')
@@ -222,9 +233,11 @@ def _get_scan_data(uid_scans, scannb, namespace=None):
         time = data_points.findtext('ns:commonCountingTime', namespaces=namespace)
     scan_data['time'] = _txt_list2arr(time)
 
-    # normalize intensity units to cps
-    if units_intensities == 'counts':
-        scan_data['data'] /= scan_data['time']
+    # DEBUG: Don't do this if XML schema is 2.1.
+    if not(namespace['ns'] == "http://www.xrdml.com/XRDMeasurement/2.1"):
+        # normalize intensity units to cps
+        if units_intensities == 'counts':
+            scan_data['data'] /= scan_data['time']
 
     # get the position of all axes
     uid_pos = data_points.findall('ns:positions', namespaces=namespace)
@@ -303,6 +316,7 @@ def read_xrdml(filename):
     if file_ext == '':
         filename = file_base + '.xrdml'
 
+    # DEBUG: Skip this step for XML schema 2.1.
     # check if file is conform with xml schema
     valid = validate_xrdml_schema(filename)
     if valid is None:
@@ -393,7 +407,7 @@ def read_xrdml(filename):
                 data[ikey] = []
 
     # remove redundant information
-    [data.pop(key) for key in ['Phi', 'Psi', 'X', 'Y', 'Z'] if not data[key]]
+    [data.pop(key) for key in ['Phi', 'Psi', 'X', 'Y', 'Z'] if not(data[key])]
     if len(data['iscannb']) == 0:
         for key in ['iscannb', 'idata', 'itime', 'i2Theta', 'iOmega', 'iPhi', 'iPsi', 'iX', 'iY', 'iZ']:
             data.pop(key)
